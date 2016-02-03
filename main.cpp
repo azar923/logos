@@ -3,11 +3,12 @@
 #include <opencv2/xfeatures2d.hpp>
 #include <opencv2/features2d.hpp>
 #include <vector>
+#include <boost/filesystem.hpp>
 
 using namespace std;
 using namespace cv::xfeatures2d;
 using namespace cv;
-
+using namespace boost::filesystem;
 class Matcher
 {
 public:
@@ -129,15 +130,7 @@ public:
         return objects;
     }
 
-    void drawObjects(cv::Mat& image, const std::vector<cv::Rect>& objects)
-    {
-        for (int i = 0; i < objects.size(); i++)
-        {
-            cv::rectangle(image, objects.at(i).tl(), objects.at(i).br(), cv::Scalar(255, 0, 0), 4);
-        }
 
-        cv::imshow("Result", image);
-    }
 
 private:
     cv::Ptr<cv::FeatureDetector> detector;
@@ -145,33 +138,132 @@ private:
     cv::Ptr<cv::DescriptorMatcher> matcher;
 };
 
+class LogoRecognizer
+{
+public:
+    LogoRecognizer()
+    {
+        cv::Ptr<cv::xfeatures2d::SIFT> sift_detector = cv::xfeatures2d::SIFT::create();
+        cv::Ptr<cv::xfeatures2d::SIFT> sift_extractor = cv::xfeatures2d::SIFT::create();
+        cv::Ptr<cv::BFMatcher> bf_matcher = new cv::BFMatcher(cv::NORM_L2,false);
+        matcher.setDetector(sift_detector);
+        matcher.setExtractor(sift_extractor);
+        matcher.setMatcher(bf_matcher);
+    }
+
+    void recognize(const string& image_path, bool draw = true, bool check = false, int groundTruth = 0) // Пока не работает
+    {
+        cv::Mat image = cv::imread(image_path);
+        image_show = image.clone();
+        Matcher::Object scene(image, &matcher);
+
+        std::vector<cv::Rect> total_objects;
+
+        for (int i = 0; i < logos.size(); i++)
+        {
+            cout << "We scanned for " << i << " logos" << endl;
+            Matcher::Object object(logos.at(i), &matcher);
+            std::vector<cv::Rect> objects = matcher.detectObjects(object, scene);
+            total_objects.insert(objects.begin(), objects.end(), total_objects.end());
+
+        }
+
+        if (check)
+        {
+            int diff = groundTruth - total_objects.size();
+            if (diff > 0)
+                cout << "We did not find " << diff << " logos";
+            else if (diff == 0)
+                cout << "All logos were found";
+            else
+                cout << "We found " << diff << " extra logos";
+        }
+
+        if (draw)
+        {
+            for (int i = 0; i < total_objects.size(); i++)
+            {
+                cv::rectangle(image_show, total_objects.at(i).tl(), total_objects.at(i).br(), cv::Scalar(255, 0, 0), 4);
+            }
+
+            cv::imshow("Result", image_show);
+        }
+
+        waitKey(0);
+
+    }
+
+    void recognizeSingleLogo(const string& image_path, const string& logo_path, bool draw = true, bool check = false, int groundTruth = 0)
+    {
+        cv::Mat image = cv::imread(image_path);
+        cv::Mat logo = cv::imread(logo_path);
+
+        image_show = image.clone();
+        Matcher::Object obj_scene(image, &matcher);
+        Matcher::Object obj_logo(logo, &matcher);
+
+        std::vector<cv::Rect> objects = matcher.detectObjects(obj_logo, obj_scene);
+
+        if (check)
+        {
+            int diff = groundTruth - objects.size();
+            if (diff > 0)
+                cout << "We did not find " << diff << " logos";
+            else if (diff == 0)
+                cout << "All logos were found";
+            else
+                cout << "We found " << diff << " extra logos";
+        }
+
+        if (draw)
+        {
+            for (int i = 0; i < objects.size(); i++)
+            {
+                cv::rectangle(image_show, objects.at(i).tl(), objects.at(i).br(), cv::Scalar(255, 0, 0), 4);
+            }
+
+            cv::imshow("Result", image_show);
+        }
+
+        waitKey(0);
+
+    }
+
+    bool loadLogos(const string& logos_dir)
+    {
+        for (directory_iterator i(logos_dir), end_iter; i !=end_iter; i++)
+        {
+            directory_entry& entry = *i;
+            cv::Mat img = cv::imread(entry.path().string());
+            logos.push_back(img);
+        }
+
+        if (!logos.empty())
+            return true;
+        else
+        {
+            cout << "Logos were not loaded";
+            return false;
+        }
+
+    }
+
+private:
+
+    std::vector<cv::Mat> logos;
+    Matcher matcher;
+    Mat image_show;
+};
+
 
 int main(int argc, char **argv)
 {    
-    const char* logo_path = argv[1];
+    const char* logos_path = argv[1];
     const char* scene_path = argv[2];
-    Matcher* myMatcher = new Matcher;
-    cv::Ptr<cv::xfeatures2d::SIFT> sift_detector = cv::xfeatures2d::SIFT::create();
-    cv::Ptr<cv::xfeatures2d::SIFT> sift_extractor = cv::xfeatures2d::SIFT::create();
-    cv::Ptr<cv::BFMatcher> bf_matcher = new cv::BFMatcher(cv::NORM_L2,false);
 
-    myMatcher->setDetector(sift_detector);
-    myMatcher->setExtractor(sift_extractor);
-    myMatcher->setMatcher(bf_matcher);
+    LogoRecognizer myLogoRecognizer;
 
-    std::cout << "Created detectors";
-
-
-    Matcher::Object object(logo_path, myMatcher);
-    Matcher::Object scene(scene_path, myMatcher);
-
-    cv::Mat draw = scene.image.clone();
-
-    std::vector<cv::Rect> objects;
-    objects = myMatcher->detectObjects(object, scene);
-    myMatcher->drawObjects(draw, objects);
-
-    cv::waitKey(0);
+    myLogoRecognizer.recognizeSingleLogo(scene_path, logos_path);
 
     return 0;
 }
