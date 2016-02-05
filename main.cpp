@@ -111,8 +111,8 @@ public:
             points[2] = scene_corners[2] ;
             points[3] = scene_corners[3] ;
 
-            // Ратио сторон прямоугольника равно ратио сторон логотипа (с каким-то допуском)
-            // если нет, то мы детектировали что-то не то, заканчиваем
+            // Отношение сторон прямоугольника равно ратио сторон логотипа (с допуском)
+            // если нет, то заканчиваем
 
             cv::Rect rect = cv::boundingRect(points);
 
@@ -151,7 +151,7 @@ public:
         matcher.setMatcher(bf_matcher);
     }
 
-    void recognize(const string& image_path, bool draw = true, bool check = false, int groundTruth = 0) // Пока не работает
+    void recognize(const string& image_path, bool draw = true, bool check = false, int groundTruth = 0) 
     {
         cv::Mat image = cv::imread(image_path);
         image_show = image.clone();
